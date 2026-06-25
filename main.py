@@ -379,7 +379,9 @@ class FH_UltimateBot(ctk.CTk):
         
         self.log("免责声明：本脚本仅供 Python 自动化技术交流与学习使用。请勿用于商业盈利或破坏游戏平衡，因使用本脚本造成的账号封禁等损失，由使用者自行承担。")
         self.log("工具运行目录不要有中文")
-        self.log("默认刷图车辆：【斯巴鲁Impreza 22B-STi Version】【调校S2  900】【保持默认涂装】【收藏车辆】")
+        self.log("默认刷图车辆：【斯巴鲁 Impreza 22B-STi Version】【改车码 123675780】【评分 834 / 限速一档 115】【保持默认涂装】【收藏车辆】")
+        self.log("默认蓝图代码：338929569（可在界面「蓝图代码」处自由更换地图）")
+        self.log("车辆调校可在游戏内自行更换改车码，无需修改脚本")
         self.log("启动前先将键盘设置为【英文键盘】")
         self.log("游戏设置为【自动转向】【自动挡】，游戏语言设置为【简体中文】")
         self.log("大部分以图像识别作为引导，减少机器盲目操作的风险，但仍无法完全避免，使用前请做好准备")
@@ -468,6 +470,7 @@ class FH_UltimateBot(ctk.CTk):
             "global_loops": 10, 
             "skill_dirs": ["right", "up", "up", "up", "left"],
             "share_code": "338929569",
+            "tune_code": "123675780",
             "auto_restart": False,
             "restart_cmd": "start steam://run/2483190", 
             "sell_mode": 1,
