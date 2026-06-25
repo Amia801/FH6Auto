@@ -1,8 +1,8 @@
 {
-    "race_count": 5,
-    "buy_count": 8,
-    "cj_count": 8,
-    "sc_count": 8,
+    "race_count": 14,
+    "buy_count": 23,
+    "cj_count": 21,
+    "sc_count": 23,
     "chk_1": true,
     "chk_2": true,
     "chk_3": true,
@@ -31,7 +31,7 @@
     "calc_d": "50",
     "use_ocr": false,
     "ocr_lang": "简体中文",
-    "calc_a": "797384",
+    "calc_a": "2013367",
     "calc_b": "81700",
     "calc_c": "30"
 }

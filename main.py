@@ -346,6 +346,7 @@ class FH_UltimateBot(ctk.CTk):
         self.cj_counter = 0
         self.sc_count = 0
         self.global_loop_current = 0
+        self._reset_progress_tracking()
         self.detail_state_confirmed = False  #初始化详情状态锁定标识
 
         self.template_cache = {}
@@ -383,7 +384,7 @@ class FH_UltimateBot(ctk.CTk):
         self.log("默认刷图车辆：【斯巴鲁 Impreza 22B-STi Version】【改车码 123675780】【评分 834 / 限速一档 115】【保持默认涂装】【收藏车辆】")
         self.log("默认蓝图代码：338929569（可在界面「蓝图代码」处自由更换地图）")
         self.log("车辆调校可在游戏内自行更换改车码，无需修改脚本")
-        self.log("步骤间等待已启用随机延时（默认 ±20%）")
+        self.log("步骤间等待已启用随机延时（默认 +0~20%）")
         self.log("启动前先将键盘设置为【英文键盘】")
         self.log("游戏设置为【自动转向】【自动挡】，游戏语言设置为【简体中文】")
         self.log("大部分以图像识别作为引导，减少机器盲目操作的风险，但仍无法完全避免，使用前请做好准备")
@@ -1048,6 +1049,13 @@ class FH_UltimateBot(ctk.CTk):
         self.lbl_mini_prog = ctk.CTkLabel(self.mini_info_frame, text="任务进度: 0 / 0", font=ctk.CTkFont(size=13))
         self.lbl_mini_prog.pack(pady=2, anchor="w")
 
+        self.progress_bar = ctk.CTkProgressBar(self.mini_info_frame, width=180, height=14)
+        self.progress_bar.set(0)
+        self.progress_bar.pack(pady=(2, 2), anchor="w", fill="x")
+
+        self.lbl_mini_eta = ctk.CTkLabel(self.mini_info_frame, text="预计剩余: --:--:--", font=ctk.CTkFont(size=13), text_color="#95A5A6")
+        self.lbl_mini_eta.pack(pady=2, anchor="w")
+
         self.lbl_mini_loop = ctk.CTkLabel(self.mini_info_frame, text="大循环: 0 / 0", font=ctk.CTkFont(size=13))
         self.lbl_mini_loop.pack(pady=2, anchor="w")
 
@@ -1253,12 +1261,74 @@ class FH_UltimateBot(ctk.CTk):
         if self.is_running:
             self.after(1000, self.update_timer)
 
+    def _format_duration(self, seconds):
+        seconds = max(0, int(seconds))
+        hrs = seconds // 3600
+        mins = (seconds % 3600) // 60
+        secs = seconds % 60
+        return f"{hrs:02d}:{mins:02d}:{secs:02d}"
+
+    def _reset_progress_tracking(self):
+        self._progress_task_name = ""
+        self._progress_task_max = 0
+        self._progress_task_start = time.time()
+        self._progress_last_val = 0
+        self._progress_last_step_time = None
+        self._progress_step_durations = []
+
     def update_running_ui(self, task_name="", current_val=0, max_val=0):
         try:
+            now = time.time()
             if task_name:
                 self.ui_call(self.lbl_mini_task.configure, text=f"当前任务: {task_name}")
+
             if max_val > 0:
-                self.ui_call(self.lbl_mini_prog.configure, text=f"执行进度: {current_val} / {max_val}")
+                current_val = int(current_val)
+                max_val = int(max_val)
+
+                if (
+                    task_name != self._progress_task_name
+                    or max_val != self._progress_task_max
+                    or current_val < self._progress_last_val
+                ):
+                    self._progress_task_name = task_name
+                    self._progress_task_max = max_val
+                    self._progress_task_start = now
+                    self._progress_last_val = 0
+                    self._progress_last_step_time = None
+                    self._progress_step_durations = []
+
+                if current_val > self._progress_last_val:
+                    if self._progress_last_step_time is not None:
+                        step_duration = now - self._progress_last_step_time
+                    else:
+                        step_duration = now - self._progress_task_start
+                    for _ in range(current_val - self._progress_last_val):
+                        self._progress_step_durations.append(step_duration / (current_val - self._progress_last_val))
+                    self._progress_last_val = current_val
+                    self._progress_last_step_time = now
+
+                pct = min(1.0, current_val / max_val) if max_val > 0 else 0.0
+                pct_text = int(pct * 100)
+
+                if current_val >= max_val:
+                    eta_text = "00:00:00"
+                elif current_val <= 0 or not self._progress_step_durations:
+                    eta_text = "计算中..."
+                else:
+                    avg_step = sum(self._progress_step_durations) / len(self._progress_step_durations)
+                    eta_text = self._format_duration((max_val - current_val) * avg_step)
+
+                self.ui_call(
+                    self.lbl_mini_prog.configure,
+                    text=f"执行进度: {current_val} / {max_val} ({pct_text}%)",
+                )
+                self.ui_call(self.lbl_mini_eta.configure, text=f"预计剩余: {eta_text}")
+                self.ui_call(self.progress_bar.set, pct)
+            elif task_name:
+                self.ui_call(self.lbl_mini_prog.configure, text="执行进度: 准备中")
+                self.ui_call(self.lbl_mini_eta.configure, text="预计剩余: --:--:--")
+                self.ui_call(self.progress_bar.set, 0)
         except Exception:
             pass
 
@@ -1268,15 +1338,13 @@ class FH_UltimateBot(ctk.CTk):
     SLEEP_JITTER = 0.2
 
     def rsleep(self, seconds, jitter=None):
-        """步骤间随机等待。jitter 为相对波动比例（默认 ±20%），轮询/暂停检测传 jitter=0。"""
+        """步骤间随机等待。jitter 为向上波动比例（默认 +0~20%），轮询/暂停检测传 jitter=0。"""
         if not self.is_running or seconds <= 0:
             return
         if jitter is None:
             jitter = self.SLEEP_JITTER
         if jitter > 0:
-            low = max(0.01, seconds * (1 - jitter))
-            high = seconds * (1 + jitter)
-            seconds = random.uniform(low, high)
+            seconds = random.uniform(seconds, seconds * (1 + jitter))
         time.sleep(seconds)
 
     def hw_key_down(self, key):
@@ -1455,7 +1523,7 @@ class FH_UltimateBot(ctk.CTk):
         calc_h = int(last_h * 0.15)
         # 设置一个兜底最小值，防止分辨率过低时文字挤压导致崩溃
         calc_w = max(calc_w, 750)
-        calc_h = max(calc_h, 150)
+        calc_h = max(calc_h, 170)
 
         pos_x = last_x + last_w - calc_w - 20
         pos_y = last_y + 20
@@ -1468,6 +1536,7 @@ class FH_UltimateBot(ctk.CTk):
         self.update_timer()
 
         
+        self._reset_progress_tracking()
         self.update_running_ui("初始化中...")
         self.race_counter = 0
         self.car_counter = 0
@@ -1864,7 +1933,7 @@ class FH_UltimateBot(ctk.CTk):
                             calc_w = int(mw * 0.40)
                             calc_h = int(mh * 0.15)
                             calc_w = max(calc_w, 750)
-                            calc_h = max(calc_h, 150)
+                            calc_h = max(calc_h, 170)
                             
                             # 放置在当前显示器的右上角（预留20像素边距）
                             pos_x = mx + mw - calc_w - 20
